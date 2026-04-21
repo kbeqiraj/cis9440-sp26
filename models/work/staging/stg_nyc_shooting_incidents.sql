@@ -16,8 +16,8 @@ cleaned AS (
             WHEN UPPER(TRIM(boro)) = 'STATEN ISLAND' THEN 'Staten Island'
             ELSE 'Unknown'
         END AS borough,
-        CAST(precinct AS INTEGER) AS police_precinct,
-        CAST(jurisdiction_code AS INTEGER) AS jurisdiction_code,
+        CAST(precinct AS STRING) AS police_precinct,
+        CAST(jurisdiction_code AS STRING) AS jurisdiction_code,
         CAST(location_desc AS STRING) AS location_desc,
         CAST(loc_classfctn_desc AS STRING) AS loc_classfctn_desc,
         CAST(loc_of_occur_desc AS STRING) AS loc_of_occur_desc,

@@ -2,7 +2,7 @@
 WITH regions_from_311 AS (
     SELECT DISTINCT
         borough,
-        CAST(REGEXP_EXTRACT(police_precinct, r'\d+') AS INTEGER) AS police_precinct
+        REGEXP_EXTRACT(police_precinct, r'\d+') AS police_precinct
     FROM {{ ref('stg_nyc_311_drug_activity') }}
     WHERE borough IS NOT NULL
 ),
