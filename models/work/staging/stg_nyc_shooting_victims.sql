@@ -25,5 +25,6 @@ cleaned AS (
         CURRENT_TIMESTAMP() AS _stg_loaded_at
     FROM source
     WHERE victim_id IS NOT NULL
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY victim_id ORDER BY (SELECT NULL)) = 1
 )
 SELECT * FROM cleaned
