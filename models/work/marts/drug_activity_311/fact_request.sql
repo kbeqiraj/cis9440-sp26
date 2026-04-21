@@ -33,13 +33,12 @@ fact AS (
     LEFT JOIN dim_date d_updated ON DATE(r.updated_date) = d_updated.full_date
     LEFT JOIN dim_time t_updated ON TIME(r.updated_date) = t_updated.full_time
     LEFT JOIN dim_region rg ON r.borough = rg.borough
-        AND REGEXP_EXTRACT(r.police_precinct, r'\d+') = CAST(rg.police_precinct AS STRING)
+        AND REGEXP_EXTRACT(r.police_precinct, r'\d+') = rg.police_precinct
     LEFT JOIN dim_details dd ON r.descriptor = dd.request_descriptor
         AND r.method_of_submission = dd.submission_channel
     LEFT JOIN dim_resolution dr ON r.status = dr.resolution_status
         AND r.resolution_description = dr.resolution_details
     LEFT JOIN dim_address ra ON r.incident_address = ra.address
         AND r.incident_zip = ra.zip_code
-        AND r.city = ra.city
 )
 SELECT * FROM fact
