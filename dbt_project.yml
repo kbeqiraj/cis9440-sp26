@@ -1,7 +1,7 @@
 name: 'nyc_analytics'
 version: '1.0.0'
 config-version: 2
-# Some default settings for dbt
+
 profile: 'default'
 
 model-paths: ["models"]
@@ -13,28 +13,22 @@ snapshot-paths: ["snapshots"]
 
 target-path: "target"
 clean-targets:
- - "target"
- - "dbt_packages"
+  - "target"
+  - "dbt_packages"
 
-# Set up models, which are basically SQL files, to create tables
 models:
- nyc_analytics:
-   +materialized: table
-
-   assignment_work:
-     staging:
-       +materialized: table
-       +schema: nyc_transit_restaurants_staging
-
-     marts:
-       +materialized: table
-       +schema: nyc_transit_restaurants_marts
-      
-       shared:
-         +materialized: table
-
-       open_restaurant_apps:
-         +materialized: table
-
-       dot_311:
-         +materialized: table
+  nyc_analytics:
+    +materialized: table
+    work:
+      staging:
+        +materialized: table
+        +schema: gr_proj_staging
+      marts:
+        +materialized: table
+        +schema: gr_proj_marts
+        shared:
+          +materialized: table
+        drug_activity_311:
+          +materialized: table
+        shooting_incidents:
+          +materialized: table

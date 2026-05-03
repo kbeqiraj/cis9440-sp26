@@ -1,0 +1,137 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw data loaded from NYC Open Data
+    database: kbeqiraj-cis9400
+    schema: gr_proj_raw_data
+    tables:
+
+      - name: nyc_311_drug_activity
+        description: |
+          NYC 311 service requests related to drug activity.
+          One row per service request.
+        columns:
+          - name: unique_key
+            description: Unique ID for the service request
+            tests:
+              - unique
+              - not_null
+          - name: created_date
+            description: Date and time the request was created
+          - name: closed_date
+            description: Date and time the request was closed
+          - name: resolution_action_updated_date
+            description: Date when resolution action was last updated
+          - name: agency
+            description: Agency code
+          - name: agency_name
+            description: Full name of the agency
+          - name: complaint_type
+            description: Type of complaint
+          - name: descriptor
+            description: Description of the complaint
+          - name: status
+            description: Current status of request
+          - name: resolution_description
+            description: Description of how the request was resolved
+          - name: incident_zip
+            description: Zip code of the request
+          - name: incident_address
+            description: Street address of the request
+          - name: street_name
+            description: Name of street where request originated
+          - name: cross_street_1
+            description: First cross street
+          - name: cross_street_2
+            description: Second cross street
+          - name: intersection_street_1
+            description: First street of intersection
+          - name: intersection_street_2
+            description: Second street of intersection
+          - name: address_type
+            description: Type of address (ADDRESS, INTERSECTION, etc.)
+          - name: city
+            description: City name where request originated
+          - name: borough
+            description: NYC borough where request originated
+          - name: bbl
+            description: Borough Block and Lot number (NYC tax lot ID)
+          - name: community_board
+            description: NYC Community Board district number
+          - name: council_district
+            description: NYC Council District number
+          - name: police_precinct
+            description: NYPD precinct number
+          - name: location_type
+            description: Type of location where request originated
+          - name: landmark
+            description: Nearby landmark
+          - name: park_borough
+            description: Borough of park if applicable
+          - name: park_facility_name
+            description: Name of park facility if applicable
+          - name: latitude
+            description: Latitude coordinate
+          - name: longitude
+            description: Longitude coordinate
+          - name: x_coordinate_state_plane
+            description: X coordinate in NY State Plane projection
+          - name: y_coordinate_state_plane
+            description: Y coordinate in NY State Plane projection
+          - name: open_data_channel_type
+            description: How the request was submitted (ONLINE, PHONE, MOBILE, etc.)
+
+      - name: nyc_shooting_incidents
+        description: |
+          NYPD shooting incident data. One row per shooting incident.
+        columns:
+          - name: incident_key
+            description: Unique identifier for each shooting incident
+            tests:
+              - unique
+              - not_null
+          - name: occur_date
+            description: Date the shooting occurred
+          - name: occur_time
+            description: Time the shooting occurred
+          - name: boro
+            description: NYC borough where the shooting occurred
+          - name: precinct
+            description: NYPD precinct number
+          - name: jurisdiction_code
+            description: Jurisdiction code for the incident
+          - name: loc_classfctn_desc
+            description: Location classification description
+          - name: loc_of_occur_desc
+            description: Description of where on the location the incident occurred
+          - name: location_desc
+            description: General location type description
+          - name: latitude
+            description: Latitude coordinate (stored as string, cast on read)
+          - name: longitude
+            description: Longitude coordinate (stored as string, cast on read)
+          - name: x_coord_cd
+            description: X coordinate in NY State Plane projection
+          - name: y_coord_cd
+            description: Y coordinate in NY State Plane projection
+
+      - name: nyc_shooting_victims
+        description: |
+          Victim-level detail for NYPD shooting incidents.
+          One row per victim.
+        columns:
+          - name: victim_id
+            description: Unique identifier for each victim record
+            tests:
+              - not_null
+          - name: incident_key
+            description: Foreign key linking to nyc_shooting_incidents
+          - name: victim_age_group
+            description: Victim age group
+          - name: victim_sex
+            description: Victim sex
+          - name: victim_race
+            description: Victim race
+          - name: stat_murder_flg
+            description: Whether the shooting resulted in a murder (Y/N)
