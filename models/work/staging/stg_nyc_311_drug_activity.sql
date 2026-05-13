@@ -71,6 +71,8 @@ cleaned AS (
     WHERE unique_key IS NOT NULL
       AND created_date IS NOT NULL
       AND borough IS NOT NULL
+      AND borough != 'Unspecified'
+      AND police_precinct != 'Unspecified'
     QUALIFY ROW_NUMBER() OVER (PARTITION BY unique_key ORDER BY created_date DESC) = 1
 )
 SELECT * FROM cleaned

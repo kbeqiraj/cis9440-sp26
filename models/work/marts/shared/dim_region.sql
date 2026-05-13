@@ -18,11 +18,26 @@ all_regions AS (
     UNION DISTINCT
     SELECT * FROM regions_from_shooting
 ),
+precinct_pop AS (
+    SELECT
+        CAST(precinct_2020 AS STRING) AS police_precinct,
+        total_pop                      AS precinct_total_pop,
+        the_geom                       AS precinct_geom,
+        Shape_Length                   AS precinct_shape_length,
+        Shape_Area                     AS precinct_shape_area
+    FROM {{ source('raw', 'nyc_precincts') }}
+),
 region_dimension AS (
     SELECT
-        {{ dbt_utils.generate_surrogate_key(['borough', 'police_precinct']) }} AS region_key,
-        borough,
-        police_precinct
-    FROM all_regions
+        {{ dbt_utils.generate_surrogate_key(['r.borough', 'r.police_precinct']) }} AS region_key,
+        r.borough,
+        r.police_precinct,
+        p.precinct_total_pop,
+        p.precinct_geom,
+        p.precinct_shape_length,
+        p.precinct_shape_area
+    FROM all_regions r
+    LEFT JOIN precinct_pop p
+        ON r.police_precinct = p.police_precinct
 )
 SELECT * FROM region_dimension

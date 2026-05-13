@@ -135,3 +135,19 @@ sources:
             description: Victim race
           - name: stat_murder_flg
             description: Whether the shooting resulted in a murder (Y/N)
+
+      - name: nyc_precincts
+        description: |
+          NYPD precinct boundaries and 2010 Census population data.
+          One row per precinct.
+        columns:
+          - name: precinct_2020
+            description: NYPD precinct number
+          - name: total_pop
+            description: Total population from 2010 Census
+          - name: the_geom
+            description: WKT geometry (MULTIPOLYGON) of precinct boundary
+          - name: Shape_Length
+            description: Perimeter length of the precinct polygon
+          - name: Shape_Area
+            description: Area of the precinct polygon
