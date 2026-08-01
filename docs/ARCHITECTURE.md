@@ -13,7 +13,7 @@ Three independent Google Cloud Functions, one per source dataset. Each function:
 - paginates through results in chunks of 5,000 records
 - enforces an explicit BigQuery schema through `SchemaField` definitions rather than relying on
   autodetection, so a source-side type change fails loudly instead of silently corrupting a column
-- writes into the `gr_proj_raw_data` dataset
+- writes into the `nyc_raw` dataset
 
 Cloud Scheduler triggers each function on a defined cadence.
 
@@ -30,7 +30,7 @@ transformation bug is reproducible and reversible without re-hitting the API.
 
 ## Layer 2 — Staging
 
-Three dbt models in `gr_proj_staging`, each following a consistent `source → cleaned → final`
+Three dbt models in `nyc_staging`, each following a consistent `source → cleaned → final`
 CTE pattern. Transformations applied here:
 
 - borough values standardised to title case across all three tables, so the conformed region
@@ -50,7 +50,7 @@ uniqueness/not-null tests on every primary key.
 
 ## Layer 3 — Marts (dimensional model)
 
-The star schema, built in `gr_proj_marts`. dbt's DAG guarantees every dimension is built before
+The star schema, built in `nyc_marts`. dbt's DAG guarantees every dimension is built before
 the fact tables that reference it, so referential integrity holds by construction.
 
 Two marts share three conformed dimensions:
@@ -80,7 +80,7 @@ the developer's username, so output datasets are consistent across contributors.
 
 ## Layer 4 — Analytics
 
-A set of BigQuery views in `gr_proj_analytics` sitting on top of the marts. These views join
+A set of BigQuery views in `nyc_analytics_views` sitting on top of the marts. These views join
 across both fact tables through the conformed dimensions and implement the project's KPIs —
 per-capita rates, Pearson and lag correlations, enforcement outcome distributions, and the
 composite hotspot score.

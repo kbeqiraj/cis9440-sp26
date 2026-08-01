@@ -1,12 +1,12 @@
 /*
-CIS 9440 UTA, SP 2026
-Group 12
-Milestone 5 — Analysis & Business Intelligence
-Project: Exploring Community Drug Activity Reports, Police Responses, and Shooting Incidents in NYC
-_______________________________________________________
-All queries are written as BigQuery views stored in: kbeqiraj-cis9400.gr_proj_analytics
-Source data is pulled from the dimensional model in: kbeqiraj-cis9400.gr_proj_marts
-Both datasets have been shared with the Professor on this account: Jaclyn.cohen@baruch.cuny.edu
+Analytics layer — BigQuery views
+Project: NYC public safety — drug activity complaints, police response, and shooting incidents
+
+All views are created in: ${GCP_PROJECT_ID}.nyc_analytics_views
+Source data comes from the dimensional model in: ${GCP_PROJECT_ID}.nyc_marts
+
+These views implement the KPI logic that sits between the star schema and the
+BI layer, so the marts stay generic and the dashboard never queries facts directly.
 */
 
 
@@ -18,7 +18,7 @@ Addresses KPI 1: Shooting Incident Rate by Borough.
 Cross-mart: Joins fact_request (311) and fact_victim_incident (shootings) through dim_region.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_precinct` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_precinct` AS
 
 WITH complaints AS (
     SELECT
@@ -27,8 +27,8 @@ WITH complaints AS (
         r.precinct_total_pop,
         ST_GEOGFROMTEXT(r.precinct_geom) AS precinct_geom,
         COUNT(f.request_key) AS total_drug_complaints
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_request` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_request` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r
         ON f.region_key = r.region_key
     WHERE r.borough IS NOT NULL
       AND r.borough != 'Unknown'
@@ -40,8 +40,8 @@ shootings AS (
     SELECT
         r.police_precinct,
         COUNT(DISTINCT f.incident_id) AS total_shooting_incidents
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r
         ON f.region_key = r.region_key
     WHERE r.police_precinct IS NOT NULL
       AND r.precinct_total_pop > 100
@@ -70,7 +70,7 @@ Addresses KPI 1: Shooting Incident Rate by Borough.
 Cross-mart: built on top of complaints_and_shootings_by_precinct which itself joins both fact tables.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_borough` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_borough` AS
 
 SELECT
     borough,
@@ -79,7 +79,7 @@ SELECT
     SUM(total_shooting_incidents) AS total_shooting_incidents,
     ROUND(SUM(total_drug_complaints) / NULLIF(SUM(precinct_total_pop), 0) * 10000, 2) AS complaints_per_10k_residents,
     ROUND(SUM(total_shooting_incidents) / NULLIF(SUM(precinct_total_pop), 0) * 10000, 2) AS shootings_per_10k_residents
-FROM `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_precinct`
+FROM `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_precinct`
 GROUP BY borough
 ORDER BY shootings_per_10k_residents DESC;
 
@@ -91,7 +91,7 @@ Addresses KPI 2: Drug Activity-Shooting Correlation Index (temporal dimension).
 Cross-mart: joins fact_request and fact_victim_incident through dim_date.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.monthly_complaints_and_shootings` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.monthly_complaints_and_shootings` AS
 
 WITH monthly_complaints AS (
     SELECT
@@ -100,8 +100,8 @@ WITH monthly_complaints AS (
         d.month_name,
         DATE_TRUNC(d.full_date, MONTH) AS month_date,
         COUNT(f.request_key) AS total_drug_complaints
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_request` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_request` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d
         ON f.created_date_key = d.date_key
     WHERE d.year IS NOT NULL
     GROUP BY d.year, d.month, d.month_name, DATE_TRUNC(d.full_date, MONTH)
@@ -111,8 +111,8 @@ monthly_shootings AS (
         d.year,
         d.month,
         COUNT(DISTINCT f.incident_id) AS total_shooting_incidents
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d ON f.incident_date_key = d.date_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d ON f.incident_date_key = d.date_key
     WHERE d.year IS NOT NULL
     GROUP BY d.year, d.month
 )
@@ -138,7 +138,7 @@ Addresses KPI 5: Drug Activity Enforcement Outcome.
 Cross-mart: joins fact_request (311) with shooting data derived from fact_victim_incident via complaints_and_shootings_by_borough.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.enforcement_outcomes_by_borough` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.enforcement_outcomes_by_borough` AS
 
 WITH categorized AS (
     SELECT
@@ -164,9 +164,9 @@ WITH categorized AS (
             ELSE 'Other'
         END AS enforcement_outcome,
         COUNT(f.request_key) AS total_complaints
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_request` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_request_resolution` rs ON f.request_status_key = rs.request_status_key
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r ON f.region_key = r.region_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_request` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_request_resolution` rs ON f.request_status_key = rs.request_status_key
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r ON f.region_key = r.region_key
     WHERE r.borough IS NOT NULL AND r.borough != 'Unknown'
     GROUP BY r.borough, enforcement_outcome
 )
@@ -179,7 +179,7 @@ SELECT
     c.total_complaints,
     ROUND(c.total_complaints * 100.0 / SUM(c.total_complaints) OVER (PARTITION BY c.borough), 2) AS pct_of_borough_complaints
 FROM categorized c
-LEFT JOIN `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_borough` b ON c.borough = b.borough
+LEFT JOIN `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_borough` b ON c.borough = b.borough
 ORDER BY b.shootings_per_10k_residents DESC, c.total_complaints DESC;
 
 /*
@@ -190,7 +190,7 @@ Addresses KPI 2: Drug Activity-Shooting Correlation Index.
 Cross-mart: joins fact_request and fact_victim_incident through dim_date and dim_region.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.correlation_by_borough` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.correlation_by_borough` AS
 
 WITH monthly_by_borough_complaints AS (
     SELECT
@@ -198,9 +198,9 @@ WITH monthly_by_borough_complaints AS (
         d.year,
         d.month,
         COUNT(f.request_key) AS total_drug_complaints
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_request` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d ON f.created_date_key = d.date_key
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r ON f.region_key = r.region_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_request` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d ON f.created_date_key = d.date_key
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r ON f.region_key = r.region_key
     WHERE d.year IS NOT NULL
       AND r.borough IS NOT NULL
       AND r.borough != 'Unknown'
@@ -212,10 +212,10 @@ monthly_by_borough_shootings AS (
         d.year,
         d.month,
         COUNT(DISTINCT f.incident_id) AS total_shooting_incidents
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d
         ON f.incident_date_key = d.date_key
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r
         ON f.region_key = r.region_key
     WHERE d.year IS NOT NULL
       AND r.borough IS NOT NULL
@@ -262,7 +262,7 @@ Addresses KPI 3: Violence Escalation Ratio
 Cross-mart: joins fact_request and fact_victim_incident through dim_date.
 */
 
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.complaint_shooting_lag_analysis` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.complaint_shooting_lag_analysis` AS
 
 WITH monthly_complaints AS (
     SELECT
@@ -270,8 +270,8 @@ WITH monthly_complaints AS (
         d.month,
         DATE_TRUNC(d.full_date, MONTH) AS month_date,
         COUNT(f.request_key) AS total_drug_complaints
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_request` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d ON f.created_date_key = d.date_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_request` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d ON f.created_date_key = d.date_key
     WHERE d.year IS NOT NULL
     GROUP BY d.year, d.month, DATE_TRUNC(d.full_date, MONTH)
 ),
@@ -280,8 +280,8 @@ monthly_shootings AS (
         d.year,
         d.month,
         COUNT(DISTINCT f.incident_id) AS total_shooting_incidents
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_date` d
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_date` d
         ON f.incident_date_key = d.date_key
     WHERE d.year IS NOT NULL
     GROUP BY d.year, d.month
@@ -326,22 +326,22 @@ ORDER BY year, month;
 
 -- SUPPLEMENTARY QUERIES USED FOR ANALYSIS 
 
-SELECT * FROM `gr_proj_analytics.correlation_by_borough`;
+SELECT * FROM `nyc_analytics_views.correlation_by_borough`;
 
 ------
 SELECT
     ROUND(CORR(total_drug_complaints, total_shooting_incidents), 4) AS citywide_correlation
-FROM `kbeqiraj-cis9400.gr_proj_analytics.monthly_complaints_and_shootings`;
+FROM `${GCP_PROJECT_ID}.nyc_analytics_views.monthly_complaints_and_shootings`;
 
 ------
 SELECT
     ROUND(CORR(complaints_lag_1month, total_shooting_incidents), 4) AS corr_lag_1month,
     ROUND(CORR(complaints_lag_2months, total_shooting_incidents), 4) AS corr_lag_2months
-FROM `kbeqiraj-cis9400.gr_proj_analytics.complaint_shooting_lag_analysis`
+FROM `${GCP_PROJECT_ID}.nyc_analytics_views.complaint_shooting_lag_analysis`
 WHERE complaints_lag_1month IS NOT NULL AND complaints_lag_2months IS NOT NULL;
 
 ------
-SELECT * FROM kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_precinct;
+SELECT * FROM ${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_precinct;
 SELECT
     police_precinct,
     precinct_total_pop,
@@ -349,26 +349,26 @@ SELECT
     total_shooting_incidents,
     complaints_per_10k_residents,
     shootings_per_10k_residents
-FROM `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_precinct`
+FROM `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_precinct`
 WHERE police_precinct = '107';
 
 ------
 SELECT
     police_precinct,
     COUNT(*) AS total_complaints
-FROM `kbeqiraj-cis9400.gr_proj_raw_data.nyc_311_drug_activity`
+FROM `${GCP_PROJECT_ID}.nyc_raw.nyc_311_drug_activity`
 GROUP BY police_precinct
 ORDER BY total_complaints DESC
 LIMIT 10;
 
 ------
-select * from kbeqiraj-cis9400.gr_proj_analytics.enforcement_outcomes_by_borough;
+select * from ${GCP_PROJECT_ID}.nyc_analytics_views.enforcement_outcomes_by_borough;
 ------
 SELECT
     EXTRACT(YEAR FROM TIMESTAMP(created_date)) AS year,
     EXTRACT(MONTH FROM TIMESTAMP(created_date)) AS month,
     COUNT(*) AS total_complaints
-FROM `kbeqiraj-cis9400.gr_proj_raw_data.nyc_311_drug_activity`
+FROM `${GCP_PROJECT_ID}.nyc_raw.nyc_311_drug_activity`
 GROUP BY year, month
 ORDER BY year, month;
 ------
@@ -380,15 +380,15 @@ VIEW 7: shootings_by_time_of_day
 Aggregates shooting incidents by time of day bucket to identify which periods of the day see the highest concentration of shootings. Uses dim_time's time_of_day_bucket field which categorizes hours into meaningful periods (e.g. Morning, Afternoon, Evening, Late Night).
 Addresses the temporal dimension of shooting incident analysis.
 */
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.shootings_by_time_of_day` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.shootings_by_time_of_day` AS
 
 WITH shootings AS (
     SELECT
         t.time_of_day_bucket,
         t.hour,
         COUNT(DISTINCT f.incident_id) AS total_shooting_incidents
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_time` t ON f.incident_time_key = t.time_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_time` t ON f.incident_time_key = t.time_key
     WHERE t.time_of_day_bucket IS NOT NULL
     GROUP BY t.time_of_day_bucket, t.hour
 )
@@ -408,7 +408,7 @@ VIEW 8: murder_rate_by_borough
 Analyzes the share of shooting incidents that resulted in murder by borough, using the murder_flag boolean field from dim_victim_details. Provides context on shooting lethality across boroughs.
 Cross-mart: joins fact_victim_incident with dim_region and dim_victim_details.
 */
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.murder_rate_by_borough` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.murder_rate_by_borough` AS
 
 SELECT
     r.borough,
@@ -416,9 +416,9 @@ SELECT
     COUNTIF(v.murder_flag = TRUE) AS total_murders,
     ROUND(COUNTIF(v.murder_flag = TRUE) * 100.0
         / NULLIF(COUNT(DISTINCT f.incident_id), 0), 2) AS murder_rate_pct
-FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r ON f.region_key = r.region_key
-LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_victim_details` v ON f.victim_details_key = v.victim_details_key
+FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r ON f.region_key = r.region_key
+LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_victim_details` v ON f.victim_details_key = v.victim_details_key
 WHERE r.borough IS NOT NULL AND r.borough != 'Unknown'
 GROUP BY r.borough
 ORDER BY murder_rate_pct DESC;
@@ -430,16 +430,16 @@ VIEW 9: top_10_hotspot_precincts
 Top 10 precincts ranked by a normalized hotspot score. Both complaints_per_10k and shootings_per_10k are min-max scaled to a 0-1 range before averaging, ensuring neither metric dominates the ranking due to scale differences. Includes murder rate per precinct from dim_victim_details.
 Cross-mart: joins complaints_and_shootings_by_precinct with murder data from fact_victim_incident and dim_victim_details.
 */
-CREATE OR REPLACE VIEW `kbeqiraj-cis9400.gr_proj_analytics.top_10_hotspot_precincts` AS
+CREATE OR REPLACE VIEW `${GCP_PROJECT_ID}.nyc_analytics_views.top_10_hotspot_precincts` AS
 WITH murder_by_precinct AS (
     SELECT
         r.police_precinct,
         COUNT(DISTINCT f.incident_id) AS total_incidents,
         COUNTIF(v.murder_flag = TRUE) AS total_murders,
         ROUND(COUNTIF(v.murder_flag = TRUE) * 100.0 / NULLIF(COUNT(DISTINCT f.incident_id), 0), 2) AS murder_rate_pct
-    FROM `kbeqiraj-cis9400.gr_proj_marts.fact_victim_incident` f
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_region` r ON f.region_key = r.region_key
-    LEFT JOIN `kbeqiraj-cis9400.gr_proj_marts.dim_victim_details` v ON f.victim_details_key = v.victim_details_key
+    FROM `${GCP_PROJECT_ID}.nyc_marts.fact_victim_incident` f
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_region` r ON f.region_key = r.region_key
+    LEFT JOIN `${GCP_PROJECT_ID}.nyc_marts.dim_victim_details` v ON f.victim_details_key = v.victim_details_key
     WHERE r.police_precinct IS NOT NULL
     GROUP BY r.police_precinct
 ),
@@ -456,7 +456,7 @@ normalized AS (
         NULLIF(MAX(complaints_per_10k_residents) OVER () - MIN(complaints_per_10k_residents) OVER (), 0) AS complaints_normalized,
         (shootings_per_10k_residents - MIN(shootings_per_10k_residents) OVER ()) /
         NULLIF(MAX(shootings_per_10k_residents) OVER () - MIN(shootings_per_10k_residents) OVER (), 0) AS shootings_normalized
-    FROM `kbeqiraj-cis9400.gr_proj_analytics.complaints_and_shootings_by_precinct`
+    FROM `${GCP_PROJECT_ID}.nyc_analytics_views.complaints_and_shootings_by_precinct`
     WHERE police_precinct != '107'
 )
 

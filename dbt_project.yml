@@ -22,10 +22,10 @@ models:
     work:
       staging:
         +materialized: table
-        +schema: gr_proj_staging
+        +schema: nyc_staging
       marts:
         +materialized: table
-        +schema: gr_proj_marts
+        +schema: nyc_marts
         shared:
           +materialized: table
         drug_activity_311:

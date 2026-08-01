@@ -34,24 +34,24 @@ NYC Open Data (Socrata API)
         │  explicit BigQuery SchemaField enforcement)
         │  triggered on a cadence by Cloud Scheduler
         ▼
-┌─────────────────────┐
-│  gr_proj_raw_data   │   Raw layer — source data preserved unmodified
-└─────────────────────┘
+┌───────────────────────┐
+│       nyc_raw         │  Raw layer — source data preserved unmodified
+└───────────────────────┘
         │  dbt: type casting, dedup, standardisation
         ▼
-┌─────────────────────┐
-│  gr_proj_staging    │   Staging layer — 3 models
-└─────────────────────┘
+┌───────────────────────┐
+│     nyc_staging       │  Staging layer — 3 models
+└───────────────────────┘
         │  dbt: surrogate keys, conformed dimensions, facts
         ▼
-┌─────────────────────┐
-│   gr_proj_marts     │   Star schema — 2 fact tables, 8 dimensions, 2 marts
-└─────────────────────┘
+┌───────────────────────┐
+│      nyc_marts        │  Star schema — 2 facts, 8 dimensions, 2 marts
+└───────────────────────┘
         │  BigQuery views implementing KPIs
         ▼
-┌─────────────────────┐
-│  gr_proj_analytics  │  →  Looker Studio dashboard
-└─────────────────────┘
+┌───────────────────────┐
+│  nyc_analytics_views  │  →  Looker Studio dashboard
+└───────────────────────┘
 ```
 
 Full detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -182,7 +182,7 @@ models/work/
         └── fact_victim_incident.sql
 
 macros/generate_schema_name.sql         # prevents dbt prefixing dataset names per developer
-analyses/gr_proj_queries.sql            # exploratory and validation queries
+analyses/analytics_views.sql            # BigQuery analytics-layer view definitions
 nyc_precincts.csv                       # 2020 Census precinct population + geometry
 docs/
 ├── ARCHITECTURE.md                     # pipeline design and rationale
@@ -197,8 +197,11 @@ described there, alongside the tests.
 ## Running it
 
 Requires a BigQuery project with the raw datasets loaded and a dbt profile named `default`.
+The GCP project is read from an environment variable rather than hardcoded:
 
 ```bash
+export DBT_GCP_PROJECT=your-gcp-project
+
 dbt deps          # install dbt_utils and codegen
 dbt build         # run all models and execute all tests
 dbt docs generate && dbt docs serve
@@ -209,15 +212,11 @@ dbt docs generate && dbt docs serve
 
 ---
 
-## Notes on scope and contribution
+## About this project
 
-This began as a graduate group project for CIS 9440 (Data Warehousing & Analytics) at Baruch
-College, Zicklin School of Business, alongside Jose Burga and Iven Zheng, who contributed to the
-analysis and final report.
-
-**The data engineering implementation in this repository — the ingestion functions, the staging
-layer, the dimensional model, and the dbt project — was authored by me**, which the commit history
-reflects.
+I designed and built this warehouse end to end — the serverless ingestion functions, the staging
+layer, the dimensional model, the dbt project, and the analytics views behind the dashboard. The
+commit history tracks that work from the first staging model through to the final star schema.
 
 ---
 
