@@ -1,0 +1,248 @@
+version: 2
+
+models:
+
+  # ──────────────────────────── Conformed dimensions ────────────────────────────
+
+  - name: dim_date
+    description: |
+      Conformed date dimension. One row per distinct calendar date appearing in either the
+      311 drug-activity feed or the NYPD shooting incident feed. Shared by both fact tables,
+      which is what allows complaint and shooting activity to be compared on the same timeline.
+    columns:
+      - name: date_key
+        description: Surrogate key (MD5 of full_date).
+        tests: [unique, not_null]
+      - name: full_date
+        description: The calendar date itself.
+        tests: [unique, not_null]
+      - name: year
+        description: Four-digit calendar year.
+      - name: quarter
+        description: Calendar quarter, 1-4.
+      - name: month
+        description: Calendar month number, 1-12.
+      - name: month_name
+        description: Full month name.
+      - name: day_of_month
+        description: Day of month, 1-31.
+      - name: day_of_week
+        description: Day of week as an integer, 1 = Sunday.
+      - name: day_name
+        description: Full weekday name.
+      - name: is_weekend
+        description: True when the date falls on a Saturday or Sunday.
+      - name: fiscal_year
+        description: Fiscal year, incremented for dates from July onward.
+
+  - name: dim_time
+    description: |
+      Conformed time-of-day dimension. One row per distinct time value across both source
+      systems. Separated from dim_date deliberately — a combined date-time dimension produced
+      unnecessarily high cardinality and prevented time-of-day analysis independent of date.
+    columns:
+      - name: time_key
+        description: Surrogate key (MD5 of full_time).
+        tests: [unique, not_null]
+      - name: full_time
+        description: The time value itself.
+        tests: [unique, not_null]
+
+  - name: dim_region
+    description: |
+      Conformed geography dimension — the primary link between the two marts. One row per
+      borough and police-precinct combination observed in either source, enriched with 2020
+      Census precinct population and geometry to support per-capita normalisation and mapping.
+    columns:
+      - name: region_key
+        description: Surrogate key (MD5 of borough + police_precinct).
+        tests: [unique, not_null]
+      - name: borough
+        description: NYC borough, standardised to title case in staging.
+        tests: [not_null]
+      - name: police_precinct
+        description: NYPD precinct number as a string.
+      - name: precinct_total_pop
+        description: |
+          Precinct resident population from the 2020 Decennial Census. Note precinct 22
+          (Central Park) records only 25 residents; per-capita metrics apply a population
+          threshold to exclude it.
+      - name: precinct_geom
+        description: Precinct boundary geometry, used for choropleth mapping.
+      - name: precinct_shape_length
+        description: Precinct boundary length.
+      - name: precinct_shape_area
+        description: Precinct boundary area.
+
+  # ────────────────────── Drug Activity 311 mart ──────────────────────
+
+  - name: dim_request_details
+    description: One row per distinct combination of complaint descriptor and submission channel.
+    columns:
+      - name: details_key
+        description: Surrogate key (MD5 of descriptor + method_of_submission).
+        tests: [unique, not_null]
+      - name: request_descriptor
+        description: Free-text descriptor of the complaint as recorded by 311.
+      - name: submission_channel
+        description: How the request reached 311 (phone, online, mobile, and so on).
+
+  - name: dim_request_resolution
+    description: |
+      One row per distinct combination of request status and resolution description. This is
+      the dimension that carries NYPD enforcement outcome — whether a complaint resulted in an
+      arrest, a summons, or no formal action.
+    columns:
+      - name: request_status_key
+        description: Surrogate key (MD5 of status + resolution_description).
+        tests: [unique, not_null]
+      - name: resolution_status
+        description: Current status of the service request.
+      - name: resolution_details
+        description: Narrative description of how the NYPD resolved the request.
+
+  - name: dim_request_address
+    description: |
+      One row per distinct address and ZIP combination. Attributes are aggregated across the
+      group because identical addresses on council-district boundaries were being emitted with
+      conflicting district values, producing a 133K-row fan-out in fact_request against an
+      expected 84K grain.
+    columns:
+      - name: request_address_key
+        description: Surrogate key (MD5 of incident_address + incident_zip).
+        tests: [unique, not_null]
+      - name: address
+        description: Street address of the reported incident.
+      - name: zip_code
+        description: ZIP code, validated and standardised in staging.
+
+  - name: fact_request
+    description: |
+      Fact table at the grain of one row per 311 drug-activity service request (~84K rows).
+      Carries three separate date/time key pairs — created, closed, and resolution-updated —
+      so request lifecycle duration can be measured.
+    columns:
+      - name: request_key
+        description: Surrogate key (MD5 of request_id).
+        tests: [unique, not_null]
+      - name: request_id
+        description: Degenerate key — the original 311 unique_key, retained for drill-through.
+        tests: [unique, not_null]
+      - name: request_details_key
+        tests:
+          - relationships:
+              to: ref('dim_request_details')
+              field: details_key
+      - name: request_status_key
+        tests:
+          - relationships:
+              to: ref('dim_request_resolution')
+              field: request_status_key
+      - name: request_address_key
+        tests:
+          - relationships:
+              to: ref('dim_request_address')
+              field: request_address_key
+      - name: region_key
+        tests:
+          - relationships:
+              to: ref('dim_region')
+              field: region_key
+      - name: created_date_key
+        description: Foreign key to dim_date for request creation.
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: created_time_key
+        description: Foreign key to dim_time for request creation.
+      - name: closed_date_key
+        description: Foreign key to dim_date for request closure. Null while a request is open.
+      - name: closed_time_key
+        description: Foreign key to dim_time for request closure.
+      - name: updated_date_key
+        description: Foreign key to dim_date for the last resolution update.
+      - name: updated_time_key
+        description: Foreign key to dim_time for the last resolution update.
+      - name: request_latitude
+        description: Latitude of the reported incident.
+      - name: request_longitude
+        description: Longitude of the reported incident.
+
+  # ────────────────────── Shooting Incidents mart ──────────────────────
+
+  - name: dim_victim_details
+    description: |
+      One row per distinct victim profile — age group, sex, race, and fatality flag. The
+      corrupt source age-group value of 1022 is mapped to 'Unknown' in staging.
+    columns:
+      - name: victim_details_key
+        description: Surrogate key (MD5 of age group + sex + race + murder flag).
+        tests: [unique, not_null]
+      - name: age_group
+        description: Victim age bracket.
+      - name: gender
+        description: Victim sex as recorded by the NYPD.
+      - name: race
+        description: Victim race as recorded by the NYPD.
+      - name: murder_flag
+        description: Boolean, converted from the source Y/N string, true when the shooting was fatal.
+
+  - name: dim_incident_address
+    description: |
+      One row per distinct location profile. Uses a composite surrogate key across all three
+      location fields — keying on description alone caused a 4x fan-out because the same
+      location type appeared with multiple classification combinations.
+    columns:
+      - name: incident_address_key
+        description: Surrogate key (MD5 of classification + location description + occurrence indicator).
+        tests: [unique, not_null]
+      - name: incident_address_desc
+        description: Description of the location where the shooting occurred.
+      - name: incident_address_type
+        description: Location classification.
+      - name: incident_in_out
+        description: Whether the incident occurred inside or outside.
+
+  - name: fact_victim_incident
+    description: |
+      Fact table at the grain of one row per victim per shooting incident (~25K rows). The
+      NYPD publishes incidents and victims as two tables sharing incident_key; they are joined
+      here to the victim grain, since a single incident may involve multiple victims.
+    columns:
+      - name: victim_incident_key
+        description: Surrogate key (MD5 of victim_id).
+        tests: [unique, not_null]
+      - name: victim_id
+        description: Degenerate key — original victim identifier, retained for drill-through.
+        tests: [unique, not_null]
+      - name: incident_id
+        description: Degenerate key — original incident identifier. Repeats across victims of the same incident.
+        tests: [not_null]
+      - name: victim_details_key
+        tests:
+          - relationships:
+              to: ref('dim_victim_details')
+              field: victim_details_key
+      - name: incident_address_key
+        tests:
+          - relationships:
+              to: ref('dim_incident_address')
+              field: incident_address_key
+      - name: region_key
+        tests:
+          - relationships:
+              to: ref('dim_region')
+              field: region_key
+      - name: incident_date_key
+        description: Foreign key to dim_date for the incident occurrence date.
+        tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: incident_time_key
+        description: Foreign key to dim_time for the incident occurrence time.
+      - name: incident_latitude
+        description: Latitude of the incident.
+      - name: incident_longitude
+        description: Longitude of the incident.

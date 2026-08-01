@@ -1,15 +1,226 @@
-Welcome to your new dbt project!
+# NYC Public Safety Data Warehouse
 
-### Using the starter project
+An end-to-end analytics engineering project that ingests three NYC Open Data sources through a
+scheduled serverless pipeline, models them into a Kimball star schema on BigQuery with dbt, and
+serves a Looker Studio dashboard analysing the relationship between drug-activity complaints,
+NYPD enforcement outcomes, and shooting incidents across New York City.
 
-Try running the following commands:
-- dbt run
-- dbt test
+**Stack:** Google BigQuery · Google Cloud Functions (Python) · Google Cloud Scheduler · dbt · Looker Studio · SQL
 
+---
 
-### Resources:
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [dbt community](https://getdbt.com/community) to learn from other analytics engineers
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+## What this project does
+
+New York City publishes 311 service requests and NYPD shooting incidents as separate, unrelated
+datasets. Neither can answer questions about the other. This project integrates them behind
+**conformed dimensions** so that complaint patterns and violence patterns can be analysed together
+at the borough and police-precinct level, normalised per capita against 2020 Census population.
+
+Two analytical questions drive the model:
+
+1. How do drug-activity complaints and police response outcomes relate to shooting incidents at the
+   neighbourhood level, and how does that relationship shift over time?
+2. How are complaints distributed across neighbourhoods and time, and how does the NYPD actually
+   respond — arrest, summons, or no enforcement action — and does that differ by geography?
+
+---
+
+## Architecture
+
+```
+NYC Open Data (Socrata API)
+        │
+        │  3 × Cloud Functions (Python + sodapy, 5,000-record pagination,
+        │  explicit BigQuery SchemaField enforcement)
+        │  triggered on a cadence by Cloud Scheduler
+        ▼
+┌─────────────────────┐
+│  gr_proj_raw_data   │   Raw layer — source data preserved unmodified
+└─────────────────────┘
+        │  dbt: type casting, dedup, standardisation
+        ▼
+┌─────────────────────┐
+│  gr_proj_staging    │   Staging layer — 3 models
+└─────────────────────┘
+        │  dbt: surrogate keys, conformed dimensions, facts
+        ▼
+┌─────────────────────┐
+│   gr_proj_marts     │   Star schema — 2 fact tables, 8 dimensions, 2 marts
+└─────────────────────┘
+        │  BigQuery views implementing KPIs
+        ▼
+┌─────────────────────┐
+│  gr_proj_analytics  │  →  Looker Studio dashboard
+└─────────────────────┘
+```
+
+Full detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+---
+
+## Data sources
+
+| Source | Grain | Volume | Notes |
+|---|---|---|---|
+| NYC 311 Service Requests | One row per service request | ~89K raw → 84K modelled | Filtered to `agency = NYPD` and `complaint_type = 'Drug Activity'` from a 20M+ row dataset |
+| NYPD Shooting Incidents | One row per incident | ~28K | Incident-level: date, time, precinct, location |
+| NYPD Shooting Victims | One row per victim | ~28K → 25K modelled | Joined to incidents on `incident_key` |
+| 2020 Decennial Census | One row per precinct | Precinct level | Population and geometry, used for per-capita normalisation |
+
+---
+
+## Dimensional model
+
+Two fact tables sharing three conformed dimensions — the conformed dimensions are what make
+cross-mart analysis possible.
+
+**Facts**
+
+| Table | Grain | Rows |
+|---|---|---|
+| `fact_request` | One 311 drug-activity service request | ~84K |
+| `fact_victim_incident` | One victim per shooting incident | ~25K |
+
+**Conformed dimensions** (shared by both facts)
+
+| Dimension | Purpose |
+|---|---|
+| `dim_date` | Calendar attributes — year, quarter, month, day of week, weekend flag, fiscal year |
+| `dim_time` | Time-of-day analysis and hourly distributions |
+| `dim_region` | Borough × police precinct, extended with Census population and precinct geometry |
+
+**Mart-specific dimensions**
+
+- Drug Activity 311 — `dim_request_details`, `dim_request_resolution`, `dim_request_address`
+- Shooting Incidents — `dim_victim_details`, `dim_incident_address`
+
+All surrogate keys are generated with `dbt_utils.generate_surrogate_key()` (MD5 hashing).
+Degenerate keys (`request_id`, `incident_id`, `victim_id`) are retained on the facts for
+drill-through and traceability back to the source systems.
+
+---
+
+## Engineering problems solved
+
+These are the parts of the project that took real debugging, and they are the parts worth reading.
+
+**A 133,000-row fan-out in the fact table.** `fact_request` was returning ~133K rows against an
+expected ~84K. The cause was `dim_request_address`: identical physical addresses sitting on NYC
+council-district boundaries were being assigned different `council_district` values, so a single
+address produced multiple dimension rows and multiplied the fact grain on join. Resolved by
+grouping on address and ZIP and collapsing the conflicting attributes with `MAX()`/`MIN()`,
+restoring the correct 84K grain.
+
+**A 4× fan-out in the shooting incidents mart.** The same location type appeared with several
+classification combinations, so joining on location description alone duplicated victim rows.
+Resolved with a composite surrogate key built across all three location fields
+(`location_desc`, `classification_code`, `inside_outside_indicator`).
+
+**Splitting an over-cardinal date-time dimension.** The initial model used a combined
+`dim_date_time`, which produced unnecessarily high cardinality and blocked flexible temporal
+analysis. Separating `dim_date` and `dim_time` made lag analysis and time-of-day heatmaps possible.
+
+**Duplicate primary keys in the source feeds.** Both shooting tables shipped duplicate keys.
+Handled in staging with `QUALIFY ROW_NUMBER()` deduplication rather than a downstream `DISTINCT`,
+so the grain is guaranteed before anything joins to it.
+
+**Data quality anomalies that would have distorted the analysis.**
+
+- Precincts 107 and 110 (Queens) showed complaint volumes wildly out of proportion to their
+  population and shooting counts. 311 assigns precinct from caller input rather than geocoding, so
+  these appear to act as placeholder values when a request cannot be geolocated. Both are excluded
+  from precinct-level maps.
+- Precinct 22 (Central Park) has a recorded residential population of 25, which makes any
+  per-capita rate meaningless. Excluded via a population threshold.
+- A corrupt `victim_age_group` value of `1022` was mapped to `Unknown`.
+- The 311 feed contains a genuine gap between roughly April 2021 and January 2022, consistent with
+  reduced 311 activity during COVID lockdown. This exists in the upstream source and is documented
+  rather than patched.
+
+---
+
+## Metrics implemented
+
+| Metric | Definition |
+|---|---|
+| Drug Activity Complaint Rate | Complaints per 10,000 residents, by precinct |
+| Shooting Incident Rate | Shooting incidents per 10,000 residents, by precinct and borough |
+| Drug Activity–Shooting Correlation | Pearson correlation of monthly complaint and shooting rates, citywide and by borough |
+| Lag Correlation | Correlation between complaint volume and shootings 1–2 months later — a more defensible construction than a direct ratio |
+| Enforcement Outcome Distribution | Share of complaints by NYPD resolution (arrest, summons, no action), by borough |
+| Hotspot Score | Min-max normalised composite of per-capita complaint and shooting rates |
+| Shooting Fatality Rate | Share of shooting incidents resulting in a fatality, by borough |
+
+**Headline figures from the final warehouse:** 84.6K drug-activity complaints · 20.1K shooting
+victim incidents · 19.83% fatality rate · 3,918 murders.
+
+---
+
+## Repository layout
+
+```
+models/work/
+├── staging/
+│   ├── sources.yml                     # source definitions + uniqueness/not-null tests
+│   ├── stg_nyc_311_drug_activity.sql
+│   ├── stg_nyc_shooting_incidents.sql
+│   └── stg_nyc_shooting_victims.sql
+└── marts/
+    ├── schema.yml                      # model documentation + referential integrity tests
+    ├── shared/                         # conformed dimensions
+    │   ├── dim_date.sql
+    │   ├── dim_time.sql
+    │   └── dim_region.sql
+    ├── drug_activity_311/
+    │   ├── dim_request_details.sql
+    │   ├── dim_request_resolution.sql
+    │   ├── dim_request_address.sql
+    │   └── fact_request.sql
+    └── shooting_incidents/
+        ├── dim_victim_details.sql
+        ├── dim_incident_address.sql
+        └── fact_victim_incident.sql
+
+macros/generate_schema_name.sql         # prevents dbt prefixing dataset names per developer
+analyses/gr_proj_queries.sql            # exploratory and validation queries
+nyc_precincts.csv                       # 2020 Census precinct population + geometry
+docs/
+├── ARCHITECTURE.md                     # pipeline design and rationale
+└── dimensional-model.pdf               # full star schema diagram
+```
+
+`models/work/marts/schema.yml` doubles as the data dictionary — every model and column is
+described there, alongside the tests.
+
+---
+
+## Running it
+
+Requires a BigQuery project with the raw datasets loaded and a dbt profile named `default`.
+
+```bash
+dbt deps          # install dbt_utils and codegen
+dbt build         # run all models and execute all tests
+dbt docs generate && dbt docs serve
+```
+
+`dbt build` runs models in dependency order and executes the tests defined in
+`models/work/staging/sources.yml` and `models/work/marts/schema.yml`.
+
+---
+
+## Notes on scope and contribution
+
+This began as a graduate group project for CIS 9440 (Data Warehousing & Analytics) at Baruch
+College, Zicklin School of Business, alongside Jose Burga and Iven Zheng, who contributed to the
+analysis and final report.
+
+**The data engineering implementation in this repository — the ingestion functions, the staging
+layer, the dimensional model, and the dbt project — was authored by me**, which the commit history
+reflects.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
