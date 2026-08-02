@@ -126,10 +126,15 @@ so the grain is guaranteed before anything joins to it.
 
 **Data quality anomalies that would have distorted the analysis.**
 
-- Precincts 107 and 110 (Queens) showed complaint volumes wildly out of proportion to their
-  population and shooting counts. 311 assigns precinct from caller input rather than geocoding, so
-  these appear to act as placeholder values when a request cannot be geolocated. Both are excluded
-  from precinct-level maps.
+- Precincts 107 and 110 (Queens) between them hold **56,032 of 84,627 complaints — 66% of the
+  entire dataset**. Precinct 107 alone records 3,136 complaints per 10,000 residents against 278
+  for the highest genuine precinct, an 11× gap. 311 assigns precinct from caller input rather than
+  geocoding the incident, so these two appear to act as fallback values when a request cannot be
+  located. Both are excluded from precinct-level maps, and the effect is visible in the committed
+  [analytics output](data/analytics_output/).
+- Complaint volume rises roughly 24× between 2020 and 2025, which is not a credible change in
+  actual drug activity — it reflects 311 intake and categorisation changes. Shooting counts over
+  the same window stay flat, and are the more trustworthy series.
 - Precinct 22 (Central Park) has a recorded residential population of 25, which makes any
   per-capita rate meaningless. Excluded via a population threshold.
 - A corrupt `victim_age_group` value of `1022` was mapped to `Unknown`.
@@ -188,6 +193,7 @@ models/work/
 
 macros/generate_schema_name.sql         # prevents dbt prefixing dataset names per developer
 analyses/analytics_views.sql            # BigQuery analytics-layer view definitions
+data/analytics_output/                  # materialised view results (committed)
 nyc_precincts.csv                       # 2020 Census precinct population + geometry
 docs/
 ├── ARCHITECTURE.md                     # pipeline design and rationale
