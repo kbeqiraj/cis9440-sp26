@@ -26,7 +26,7 @@ All three share the same structure; only the dataset, schema, and filter differ.
    BigQuery, converts empty strings to `None` so they land as proper NULLs, and forces ZIP codes to
    strings so leading zeros survive.
 4. **Ensure the target exists.** Creates the dataset and table if missing, using an explicit
-   `CORE_BQ_SCHEMA` rather than autodetection, so a source-side type change fails loudly instead
+   `CORE_BQ_SCHEMA` rather than autodetection — a source-side type change then fails loudly instead
    of silently corrupting a column.
 5. **Absorb new source columns.** `update_bq_schema_if_needed()` diffs the incoming record keys
    against the live table schema and appends any new fields as `STRING`. NYC Open Data adds columns

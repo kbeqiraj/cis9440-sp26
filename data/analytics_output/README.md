@@ -57,7 +57,7 @@ March 2021 records only 14 complaints, and April 2021 through January 2022 is mi
 The gap exists in the upstream NYC Open Data source and is consistent with reduced 311 activity
 during COVID. It has not been interpolated or patched.
 
-Shooting figures are blank for 2026 months; that feed currently ends in December 2025.
+Shooting figures are blank for 2026 months — that feed currently ends in December 2025.
 
 ### Also filtered upstream
 

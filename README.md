@@ -20,7 +20,7 @@ Two analytical questions drive the model:
 
 1. How do drug-activity complaints and police response outcomes relate to shooting incidents at the
    neighborhood level, and how does that relationship shift over time?
-2. How are complaints distributed across neighbourhoods and time, and how does the NYPD actually
+2. How are complaints distributed across neighborhoods and time, and how does the NYPD actually
    respond (arrest, summons, or no enforcement action), and does that differ by geography?
 
 ---
@@ -139,7 +139,7 @@ Full detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Dimensional model
 
-Two fact tables share three conformed dimensions. Those shared dimensions are what let the two
+Two fact tables share three conformed dimensions — those shared dimensions are what let the two
 marts be analyzed together.
 
 **Facts**
@@ -154,7 +154,7 @@ marts be analyzed together.
 | Dimension | Purpose |
 |---|---|
 | `dim_date` | Calendar attributes: year, quarter, month, day of week, weekend flag, fiscal year |
-| `dim_time` | Time-of-day analysis and hourly distributions |
+| `dim_time` | Time-of-day analyzis and hourly distributions |
 | `dim_region` | Borough × police precinct, extended with Census population and precinct geometry |
 
 **Mart-specific dimensions**
@@ -174,8 +174,8 @@ These took the longest to diagnose.
 
 ### A 133,000-row fan-out in `fact_request`
 
-The fact table kept returning about 133K rows where the grain said 84K. `dim_request_address` was
-the culprit. Identical physical addresses that sit on NYC council-district boundaries came through
+The fact table kept returning about 133K rows where the grain said 84K — `dim_request_address`
+was the culprit. Identical physical addresses that sit on NYC council-district boundaries came through
 with different `council_district` values, so one address produced several dimension rows and
 multiplied the fact on join. Grouping on address and ZIP, then collapsing the conflicting
 attributes with `MAX()`/`MIN()`, put it back to 84K.
@@ -189,7 +189,7 @@ all three location fields: `location_desc`, `classification_code`, `inside_outsi
 ### Splitting the date-time dimension
 
 An early version used a single `dim_date_time`. Cardinality got out of hand and it made temporal
-analysis awkward. Splitting it into `dim_date` and `dim_time` is what made lag analysis and
+analyzis awkward. Splitting it into `dim_date` and `dim_time` is what made lag analyzis and
 time-of-day heatmaps possible at all.
 
 ### Duplicate keys in the source feeds
@@ -200,11 +200,11 @@ anything joins to it.
 
 ### Data quality anomalies
 
-Three things in the source data would have skewed the analysis if left alone.
+Three things in the source data would have skewed the analyzis if left alone.
 
 - Precincts 107 and 110 (Queens) between them hold **56,032 of 84,627 complaints, 66% of the
   entire dataset**. Precinct 107 alone records 3,136 complaints per 10,000 residents against 278
-  for the highest genuine precinct, an 11× gap. 311 assigns precinct from caller input rather than
+  for the highest genuine precinct — an 11× gap. 311 assigns precinct from caller input rather than
   geocoding the incident, so these two appear to act as fallback values when a request cannot be
   located. Both are excluded from precinct-level maps, and the effect is visible in the committed
   [analytics output](data/analytics_output/).
@@ -227,7 +227,7 @@ Three things in the source data would have skewed the analysis if left alone.
 | Drug Activity Complaint Rate | Complaints per 10,000 residents, by precinct |
 | Shooting Incident Rate | Shooting incidents per 10,000 residents, by precinct and borough |
 | Drug Activity–Shooting Correlation | Pearson correlation of monthly complaint and shooting rates, citywide and by borough |
-| Lag Correlation | Correlation between complaint volume and shootings 1–2 months later. More defensible than a direct ratio |
+| Lag Correlation | Correlation between complaint volume and shootings 1–2 months later — more defensible than a direct ratio |
 | Enforcement Outcome Distribution | Share of complaints by NYPD resolution (arrest, summons, no action), by borough |
 | Hotspot Score | Min-max normalized composite of per-capita complaint and shooting rates |
 | Shooting Fatality Rate | Share of shooting incidents resulting in a fatality, by borough |
