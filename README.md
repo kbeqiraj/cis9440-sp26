@@ -154,7 +154,7 @@ marts be analyzed together.
 | Dimension | Purpose |
 |---|---|
 | `dim_date` | Calendar attributes: year, quarter, month, day of week, weekend flag, fiscal year |
-| `dim_time` | Time-of-day analyzis and hourly distributions |
+| `dim_time` | Time-of-day analysis and hourly distributions |
 | `dim_region` | Borough × police precinct, extended with Census population and precinct geometry |
 
 **Mart-specific dimensions**
@@ -189,7 +189,7 @@ all three location fields: `location_desc`, `classification_code`, `inside_outsi
 ### Splitting the date-time dimension
 
 An early version used a single `dim_date_time`. Cardinality got out of hand and it made temporal
-analyzis awkward. Splitting it into `dim_date` and `dim_time` is what made lag analyzis and
+analysis awkward. Splitting it into `dim_date` and `dim_time` is what made lag analysis and
 time-of-day heatmaps possible at all.
 
 ### Duplicate keys in the source feeds
@@ -200,7 +200,7 @@ anything joins to it.
 
 ### Data quality anomalies
 
-Three things in the source data would have skewed the analyzis if left alone.
+Three things in the source data would have skewed the analysis if left alone.
 
 - Precincts 107 and 110 (Queens) between them hold **56,032 of 84,627 complaints, 66% of the
   entire dataset**. Precinct 107 alone records 3,136 complaints per 10,000 residents against 278

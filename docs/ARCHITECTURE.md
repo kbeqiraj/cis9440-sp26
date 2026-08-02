@@ -156,7 +156,7 @@ changes. Collapsing these into fewer layers makes every failure a full-pipeline 
 grains — one row per complaint versus one row per victim. Forcing them into a single fact table
 would require either aggregating away detail or fabricating a shared grain. Sharing `dim_date`,
 `dim_time`, and `dim_region` instead lets each fact keep its natural grain while still supporting
-cross-dataset analyzis at the borough and precinct level.
+cross-dataset analysis at the borough and precinct level.
 
 Surrogate keys are used throughout because source identifiers are unstable, and two of the three feeds ship
 duplicate primary keys. MD5 surrogate keys via `dbt_utils.generate_surrogate_key()` isolate the
