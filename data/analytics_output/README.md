@@ -1,7 +1,7 @@
 # Analytics layer output
 
-Materialised results of the three BigQuery views defined in
-[`analyses/analytics_views.sql`](../../analyses/analytics_views.sql). These are what the Looker
+Materialized results of the three BigQuery views defined in
+[`analyzes/analytics_views.sql`](../../analyzes/analytics_views.sql). These are what the Looker
 Studio dashboard reads, committed here so the warehouse's output is inspectable without BigQuery
 access.
 
@@ -11,7 +11,7 @@ access.
 | `complaints_and_shootings_by_borough.csv` | One row per borough | 5 |
 | `monthly_complaints_and_shootings.csv` | One row per month, 2020–2026 | 66 |
 
-The precinct view also carries a `precinct_geom` column — WKT polygon boundaries used for the
+The precinct view also carries a `precinct_geom` column holding WKT polygon boundaries for the
 choropleth. It is **omitted here**, since it accounted for 3.4 MB of a 3.4 MB export and makes the
 file unreadable in a browser. Query the view directly if you need the geometry.
 
@@ -31,24 +31,24 @@ know why they differ.
 | **110** | Queens | 172,634 | **8,640** | **500.48** |
 | 25 *(highest legitimate)* | Manhattan | 47,405 | 1,317 | 277.82 |
 
-Those two precincts account for **56,032 of 84,627 complaints — 66.2% of the entire dataset**.
+Those two precincts account for **56,032 of 84,627 complaints, 66.2% of the entire dataset**.
 Precinct 107's per-capita rate is **11× the highest genuine precinct**.
 
-This is not a real concentration of drug activity. The 311 system assigns precinct from caller
-input rather than geocoding the incident, and these two appear to act as fallback values when a
-request cannot be located. They are excluded from the precinct-level map in the dashboard.
+That is a geocoding artifact, not a real concentration of drug activity. The 311 system assigns
+precinct from caller input rather than geocoding the incident, so these two appear to act as
+fallback values when a request cannot be located. Both are excluded from the precinct-level map.
 
-**This also inflates Queens at borough level.** The borough file shows Queens at 276.87 complaints
-per 10k against Manhattan's 54.80 — a fivefold gap that is entirely an artefact of the two
-precincts above. Borough comparisons of complaint volume are not trustworthy without excluding
+The same two precincts inflate Queens at borough level. The borough file shows Queens at 276.87 complaints
+per 10k against Manhattan's 54.80. That fivefold gap is entirely an artifact of the two precincts
+above. Borough comparisons of complaint volume are not trustworthy without excluding
 them; shooting figures are unaffected.
 
 ### 2. Complaint volume rises ~24× over the period
 
 Monthly complaints run around 250–500 in 2020 and reach 6,038 by July 2025. A twenty-fourfold
 increase in genuine drug-activity reports over five years is not plausible; this most likely
-reflects changes in 311 intake, categorisation, or routing rather than conditions on the ground.
-**Treat the trend as a reporting artefact, not a crime trend.** Shooting incident counts over the
+reflects changes in 311 intake, categorization, or routing rather than conditions on the ground.
+Read the trend as a reporting artifact rather than a crime trend. Shooting incident counts over the
 same window stay broadly flat (35–243 per month), which is the more credible series.
 
 ### 3. There is a real gap in the 311 feed
@@ -57,7 +57,7 @@ March 2021 records only 14 complaints, and April 2021 through January 2022 is mi
 The gap exists in the upstream NYC Open Data source and is consistent with reduced 311 activity
 during COVID. It has not been interpolated or patched.
 
-Shooting figures are blank for 2026 months — that feed currently ends in December 2025.
+Shooting figures are blank for 2026 months; that feed currently ends in December 2025.
 
 ### Also filtered upstream
 

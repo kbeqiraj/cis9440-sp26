@@ -5,7 +5,7 @@ layer exists.
 
 ---
 
-## Layer 1 — Extract and Load (raw)
+## Layer 1: extract and load (raw)
 
 Three independent Google Cloud Functions, one per source dataset. Each function:
 
@@ -28,27 +28,27 @@ transformation bug is reproducible and reversible without re-hitting the API.
 
 ---
 
-## Layer 2 — Staging
+## Layer 2: staging
 
 Three dbt models in `nyc_staging`, each following a consistent `source → cleaned → final`
 CTE pattern. Transformations applied here:
 
-- borough values standardised to title case across all three tables, so the conformed region
+- borough values standardized to title case across all three tables, so the conformed region
   dimension joins cleanly
 - datetime fields split into separate date and time components, cast to `DATE`/`TIMESTAMP` and
   `TIME`, which is what allows independent joins to `dim_date` and `dim_time`
-- duplicate rows removed with `QUALIFY ROW_NUMBER()` on primary keys — done at staging rather
-  than downstream so grain is guaranteed before anything joins
+- duplicate rows removed with `QUALIFY ROW_NUMBER()` on primary keys. Doing this at staging
+  rather than downstream guarantees the grain before anything joins
 - `stat_murder_flg` converted from a `Y`/`N` string to a proper `BOOLEAN`
 - a corrupt `victim_age_group` value of `1022` mapped to `Unknown`
-- ZIP codes validated and standardised
+- ZIP codes validated and standardized
 
 `sources.yml` registers all raw tables under a single `raw` source with column descriptions and
 uniqueness/not-null tests on every primary key.
 
 ---
 
-## Layer 3 — Marts (dimensional model)
+## Layer 3: marts (dimensional model)
 
 The star schema, built in `nyc_marts`. dbt's DAG guarantees every dimension is built before
 the fact tables that reference it, so referential integrity holds by construction.
@@ -126,15 +126,15 @@ flowchart LR
 ```
 
 `dbt_project.yml` maps each model subfolder to its BigQuery dataset. The
-`generate_schema_name` macro overrides dbt's default behaviour of prefixing dataset names with
+`generate_schema_name` macro overrides dbt's default behavior of prefixing dataset names with
 the developer's username, so output datasets are consistent across contributors.
 
 ---
 
-## Layer 4 — Analytics
+## Layer 4: analytics
 
 A set of BigQuery views in `nyc_analytics_views` sitting on top of the marts. These views join
-across both fact tables through the conformed dimensions and implement the project's KPIs —
+across both fact tables through the conformed dimensions and implement the project's KPIs:
 per-capita rates, Pearson and lag correlations, enforcement outcome distributions, and the
 composite hotspot score.
 
@@ -147,18 +147,18 @@ Looker Studio connects to this layer.
 
 ## Why this shape
 
-**Raw / staging / marts / analytics** separates concerns that fail for different reasons.
+Splitting raw, staging, marts, and analytics separates concerns that fail for different reasons.
 Ingestion breaks when an API changes. Staging breaks when source data quality shifts. The mart
 layer breaks when the business grain is misunderstood. Analytics breaks when a metric definition
 changes. Collapsing these into fewer layers makes every failure a full-pipeline debug.
 
 **Conformed dimensions over a merged fact table.** The two datasets have genuinely different
-grains — one row per complaint versus one row per victim. Forcing them into a single fact table
+grains, one row per complaint versus one row per victim. Forcing them into a single fact table
 would require either aggregating away detail or fabricating a shared grain. Sharing `dim_date`,
 `dim_time`, and `dim_region` instead lets each fact keep its natural grain while still supporting
 cross-dataset analysis at the borough and precinct level.
 
-**Surrogate keys throughout.** Source identifiers are unstable, and two of the three feeds ship
+Surrogate keys are used throughout because source identifiers are unstable, and two of the three feeds ship
 duplicate primary keys. MD5 surrogate keys via `dbt_utils.generate_surrogate_key()` isolate the
 warehouse from source-side key changes; the original identifiers are retained as degenerate keys
 on the facts for traceability.
