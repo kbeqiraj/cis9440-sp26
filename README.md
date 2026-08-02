@@ -159,6 +159,11 @@ victim incidents · 19.83% fatality rate · 3,918 murders.
 ## Repository layout
 
 ```
+cloud_functions/                        # ingestion — one function per source dataset
+├── load_311_drug_activity/
+├── load_shooting_incidents/
+└── load_shooting_victims/
+
 models/work/
 ├── staging/
 │   ├── sources.yml                     # source definitions + uniqueness/not-null tests
@@ -196,8 +201,13 @@ described there, alongside the tests.
 
 ## Running it
 
-Requires a BigQuery project with the raw datasets loaded and a dbt profile named `default`.
-The GCP project is read from an environment variable rather than hardcoded:
+The ingestion functions are deployed separately — see
+[`cloud_functions/README.md`](cloud_functions/README.md) for their configuration and
+`gcloud` deploy commands.
+
+For the warehouse itself: requires a BigQuery project with the raw datasets loaded and a dbt
+profile named `default`. The GCP project is read from an environment variable rather than
+hardcoded:
 
 ```bash
 export DBT_GCP_PROJECT=your-gcp-project

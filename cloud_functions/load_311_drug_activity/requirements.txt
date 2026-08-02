@@ -1,0 +1,2 @@
+google-cloud-bigquery>=3.0.0
+sodapy>=2.2.0
