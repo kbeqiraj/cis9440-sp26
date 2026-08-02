@@ -54,6 +54,74 @@ NYC Open Data (Socrata API)
 └───────────────────────┘
 ```
 
+### Model lineage
+
+```mermaid
+flowchart LR
+    subgraph RAW["nyc_raw &nbsp;·&nbsp; Socrata + Census"]
+        src_nyc_311_drug_activity[("nyc_311_drug_activity")]
+        src_nyc_precincts[("nyc_precincts")]
+        src_nyc_shooting_incidents[("nyc_shooting_incidents")]
+        src_nyc_shooting_victims[("nyc_shooting_victims")]
+    end
+    subgraph STG["nyc_staging"]
+        stg_nyc_311_drug_activity["stg_nyc_311_drug_activity"]
+        stg_nyc_shooting_incidents["stg_nyc_shooting_incidents"]
+        stg_nyc_shooting_victims["stg_nyc_shooting_victims"]
+    end
+    subgraph CONF["nyc_marts &nbsp;·&nbsp; conformed dimensions"]
+        dim_date["dim_date"]
+        dim_time["dim_time"]
+        dim_region["dim_region"]
+    end
+    subgraph M1["nyc_marts &nbsp;·&nbsp; drug_activity_311"]
+        dim_request_details["dim_request_details"]
+        dim_request_resolution["dim_request_resolution"]
+        dim_request_address["dim_request_address"]
+        fact_request["fact_request"]
+    end
+    subgraph M2["nyc_marts &nbsp;·&nbsp; shooting_incidents"]
+        dim_victim_details["dim_victim_details"]
+        dim_incident_address["dim_incident_address"]
+        fact_victim_incident["fact_victim_incident"]
+    end
+
+    stg_nyc_311_drug_activity --> dim_date
+    stg_nyc_shooting_incidents --> dim_date
+    stg_nyc_shooting_incidents --> dim_incident_address
+    src_nyc_precincts --> dim_region
+    stg_nyc_311_drug_activity --> dim_region
+    stg_nyc_shooting_incidents --> dim_region
+    stg_nyc_311_drug_activity --> dim_request_address
+    stg_nyc_311_drug_activity --> dim_request_details
+    stg_nyc_311_drug_activity --> dim_request_resolution
+    stg_nyc_311_drug_activity --> dim_time
+    stg_nyc_shooting_incidents --> dim_time
+    stg_nyc_shooting_victims --> dim_victim_details
+    dim_date --> fact_request
+    dim_region --> fact_request
+    dim_request_address --> fact_request
+    dim_request_details --> fact_request
+    dim_request_resolution --> fact_request
+    dim_time --> fact_request
+    stg_nyc_311_drug_activity --> fact_request
+    dim_date --> fact_victim_incident
+    dim_incident_address --> fact_victim_incident
+    dim_region --> fact_victim_incident
+    dim_time --> fact_victim_incident
+    dim_victim_details --> fact_victim_incident
+    stg_nyc_shooting_incidents --> fact_victim_incident
+    stg_nyc_shooting_victims --> fact_victim_incident
+    src_nyc_311_drug_activity --> stg_nyc_311_drug_activity
+    src_nyc_shooting_incidents --> stg_nyc_shooting_incidents
+    src_nyc_shooting_victims --> stg_nyc_shooting_victims
+
+    classDef fact fill:#1B2A4A,stroke:#1B2A4A,color:#fff
+    classDef src fill:#E8E4DC,stroke:#B9B0A2,color:#333
+    class fact_request,fact_victim_incident fact
+    class src_nyc_311_drug_activity,src_nyc_precincts,src_nyc_shooting_incidents,src_nyc_shooting_victims src
+```
+
 Full detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ---
