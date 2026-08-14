@@ -1,7 +1,7 @@
 # Analytics layer output
 
 Materialized results of the three BigQuery views defined in
-[`analyzes/analytics_views.sql`](../../analyzes/analytics_views.sql). These are what the Looker
+[`analyses/analytics_views.sql`](../../analyses/analytics_views.sql). These are what the Looker
 Studio dashboard reads, committed here so the warehouse's output is inspectable without BigQuery
 access.
 

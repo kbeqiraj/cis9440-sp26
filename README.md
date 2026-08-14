@@ -268,7 +268,7 @@ models/work/
         └── fact_victim_incident.sql
 
 macros/generate_schema_name.sql         # prevents dbt prefixing dataset names per developer
-analyzes/analytics_views.sql            # BigQuery analytics-layer view definitions
+analyses/analytics_views.sql            # BigQuery analytics-layer view definitions
 data/analytics_output/                  # materialized view results (committed)
 nyc_precincts.csv                       # 2020 Census precinct population + geometry
 docs/
