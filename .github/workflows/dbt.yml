@@ -1,0 +1,47 @@
+name: dbt
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  parse:
+    name: Validate dbt project
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dbt
+        run: pip install dbt-bigquery
+
+      # dbt parse resolves the whole DAG without connecting to BigQuery,
+      # so a placeholder project is enough and no credentials are needed.
+      - name: Write a credential-free profile
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<'YAML'
+          default:
+            target: ci
+            outputs:
+              ci:
+                type: bigquery
+                method: oauth
+                project: ci-placeholder
+                dataset: ci
+                threads: 1
+                location: US
+          YAML
+
+      - name: Install packages
+        run: dbt deps
+
+      - name: Parse
+        env:
+          DBT_GCP_PROJECT: ci-placeholder
+        run: dbt parse
