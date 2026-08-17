@@ -1,21 +1,14 @@
 # Architecture
 
-How data moves from NYC Open Data into the warehouse and out to the dashboard, and why each
-layer exists.
+How the data gets from NYC Open Data into the warehouse and out to the dashboard.
 
----
+## Raw
 
-## Layer 1: extract and load (raw)
-
-Three independent Google Cloud Functions, one per source dataset. Each function:
-
-- queries the NYC Open Data Socrata API using the `sodapy` client
-- paginates through results in chunks of 5,000 records
-- enforces an explicit BigQuery schema through `SchemaField` definitions rather than relying on
-  autodetection, so a source-side type change fails loudly instead of silently corrupting a column
-- writes into the `nyc_raw` dataset
-
-Cloud Scheduler triggers each function on a defined cadence.
+Three Cloud Functions, one per source dataset. Each queries the Socrata API with the `sodapy`
+client, pages through the results 5,000 records at a time, and writes into the `nyc_raw` dataset.
+Schemas are defined explicitly with `SchemaField` rather than autodetected, so the load errors out
+if a source column changes type instead of writing bad data into the table. Cloud Scheduler
+triggers each function.
 
 | Cloud Function | Target table | Sort field | Filter |
 |---|---|---|---|
@@ -23,41 +16,33 @@ Cloud Scheduler triggers each function on a defined cadence.
 | `load-nyc-shooting-incidents` | `nyc_shooting_incidents` | `occur_date` | none (full load) |
 | `load-nyc-shooting-victims` | `nyc_shooting_victims` | `incident_key` | none (full load) |
 
-**The raw layer is never modified.** Data is preserved exactly as received so that any
-transformation bug is reproducible and reversible without re-hitting the API.
+Nothing modifies the raw layer. I kept it exactly as received so any transformation bug can be
+reproduced and undone without hitting the API again.
 
----
+## Staging
 
-## Layer 2: staging
+Three dbt models in `nyc_staging`, each following the same `source → cleaned → final` CTE pattern.
+What happens here:
 
-Three dbt models in `nyc_staging`, each following a consistent `source → cleaned → final`
-CTE pattern. Transformations applied here:
+- Borough values are standardized to title case across all three tables. Without this the conformed
+  region dimension doesn't join.
+- Datetime fields are split into separate date and time components and cast to `DATE`/`TIMESTAMP`
+  and `TIME`, which is what lets the facts join to `dim_date` and `dim_time` independently.
+- Duplicates are removed with `QUALIFY ROW_NUMBER()` on the primary keys. Doing it here rather than
+  downstream means the grain is settled before anything joins to it.
+- `stat_murder_flg` goes from a `Y`/`N` string to a `BOOLEAN`.
+- A corrupt `victim_age_group` value of `1022` is mapped to `Unknown`.
+- ZIP codes are validated and standardized.
 
-- borough values standardized to title case across all three tables, so the conformed region
-  dimension joins cleanly
-- datetime fields split into separate date and time components, cast to `DATE`/`TIMESTAMP` and
-  `TIME`, which is what allows independent joins to `dim_date` and `dim_time`
-- duplicate rows removed with `QUALIFY ROW_NUMBER()` on primary keys. Doing this at staging
-  rather than downstream guarantees the grain before anything joins
-- `stat_murder_flg` converted from a `Y`/`N` string to a proper `BOOLEAN`
-- a corrupt `victim_age_group` value of `1022` mapped to `Unknown`
-- ZIP codes validated and standardized
+`sources.yml` registers all the raw tables under one `raw` source, with column descriptions and
+uniqueness and not-null tests on every primary key.
 
-`sources.yml` registers all raw tables under a single `raw` source with column descriptions and
-uniqueness/not-null tests on every primary key.
+## Marts
 
----
-
-## Layer 3: marts (dimensional model)
-
-The star schema, built in `nyc_marts`. dbt's DAG guarantees every dimension is built before
-the fact tables that reference it, so referential integrity holds by construction.
+The star schema, built in `nyc_marts`. dbt's DAG builds every dimension before the facts that
+reference it, so referential integrity holds without needing to enforce it separately.
 
 Two marts share three conformed dimensions:
-
-### Model lineage
-
-Generated from the `ref()` and `source()` calls in the models, so it cannot drift from the code.
 
 ```mermaid
 flowchart LR
@@ -125,40 +110,33 @@ flowchart LR
     class src_nyc_311_drug_activity,src_nyc_precincts,src_nyc_shooting_incidents,src_nyc_shooting_victims src
 ```
 
-`dbt_project.yml` maps each model subfolder to its BigQuery dataset. The
-`generate_schema_name` macro overrides dbt's default behavior of prefixing dataset names with
-the developer's username, so output datasets are consistent across contributors.
+`dbt_project.yml` maps each model subfolder to its BigQuery dataset. The `generate_schema_name`
+macro overrides dbt's default of prefixing dataset names with the developer's username, which
+otherwise gives every contributor a different set of output datasets.
 
----
+## Analytics
 
-## Layer 4: analytics
+A set of BigQuery views in `nyc_analytics_views` on top of the marts. They join across both fact
+tables through the conformed dimensions and implement the KPIs: per-capita rates, Pearson and lag
+correlations, enforcement outcome distributions, and the composite hotspot score.
 
-A set of BigQuery views in `nyc_analytics_views` sitting on top of the marts. These views join
-across both fact tables through the conformed dimensions and implement the project's KPIs:
-per-capita rates, Pearson and lag correlations, enforcement outcome distributions, and the
-composite hotspot score.
+Keeping the KPI logic in its own view layer leaves the star schema generic, and the dashboard never
+queries the fact tables directly. Looker Studio connects here.
 
-Keeping the KPI logic in a separate view layer means the star schema stays generic and the
-dashboard never queries fact tables directly.
+## Why it's built this way
 
-Looker Studio connects to this layer.
+The four layers fail for different reasons and it's much easier to debug them separately. An API
+change breaks ingestion. A shift in source data quality breaks staging. Misunderstanding the
+business grain breaks the marts. A changed metric definition breaks analytics. With fewer layers,
+every one of those turns into a full-pipeline investigation.
 
----
+I used conformed dimensions rather than merging the two datasets into one fact table because their
+grains are genuinely different: one row per complaint against one row per victim. Merging them
+would mean either aggregating away detail or inventing a shared grain that doesn't exist. Sharing
+`dim_date`, `dim_time` and `dim_region` lets each fact keep its own grain and still supports
+analysis across both at the borough and precinct level.
 
-## Why this shape
-
-Splitting raw, staging, marts, and analytics separates concerns that fail for different reasons.
-Ingestion breaks when an API changes. Staging breaks when source data quality shifts. The mart
-layer breaks when the business grain is misunderstood. Analytics breaks when a metric definition
-changes. Collapsing these into fewer layers makes every failure a full-pipeline debug.
-
-**Conformed dimensions over a merged fact table.** The two datasets have genuinely different
-grains — one row per complaint versus one row per victim. Forcing them into a single fact table
-would require either aggregating away detail or fabricating a shared grain. Sharing `dim_date`,
-`dim_time`, and `dim_region` instead lets each fact keep its natural grain while still supporting
-cross-dataset analysis at the borough and precinct level.
-
-Surrogate keys are used throughout because source identifiers are unstable, and two of the three feeds ship
-duplicate primary keys. MD5 surrogate keys via `dbt_utils.generate_surrogate_key()` isolate the
-warehouse from source-side key changes; the original identifiers are retained as degenerate keys
-on the facts for traceability.
+Surrogate keys are used throughout because the source identifiers aren't stable and two of the
+three feeds ship duplicate primary keys. MD5 keys from `dbt_utils.generate_surrogate_key()` keep
+the warehouse insulated from source-side key changes, and the original identifiers stay on the
+facts as degenerate keys so rows can still be traced back.
