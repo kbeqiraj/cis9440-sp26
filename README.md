@@ -1,5 +1,7 @@
 # NYC Public Safety Data Warehouse
 
+[![dbt](https://github.com/kbeqiraj/nyc-public-safety-warehouse/actions/workflows/dbt.yml/badge.svg)](https://github.com/kbeqiraj/nyc-public-safety-warehouse/actions/workflows/dbt.yml)
+
 An analytics engineering project that pulls three NYC Open Data sources through a scheduled 
 serverless pipeline, models them into a Kimball star schema on BigQuery with dbt, and feeds a
 Looker Studio dashboard looking at drug-activity complaints, NYPD enforcement outcomes, and
