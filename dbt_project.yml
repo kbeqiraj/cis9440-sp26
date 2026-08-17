@@ -19,7 +19,7 @@ clean-targets:
 models:
   nyc_analytics:
     +materialized: table
-    work:
+    warehouse:
       staging:
         +materialized: table
         +schema: nyc_staging

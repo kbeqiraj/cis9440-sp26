@@ -276,7 +276,7 @@ cloud_functions/                        # ingestion, one function per source dat
 ├── load_shooting_incidents/
 └── load_shooting_victims/
 
-models/work/
+models/warehouse/
 ├── staging/
 │   ├── sources.yml                     # source definitions + uniqueness/not-null tests
 │   ├── stg_nyc_311_drug_activity.sql
@@ -307,7 +307,7 @@ docs/
 └── dimensional-model.pdf               # full star schema diagram
 ```
 
-`models/work/marts/schema.yml` also serves as the data dictionary. Every model and column is
+`models/warehouse/marts/schema.yml` also serves as the data dictionary. Every model and column is
 described there next to its tests.
 
 ## Config & Running
@@ -328,7 +328,7 @@ dbt docs generate && dbt docs serve
 ```
 
 `dbt build` runs the models in dependency order and executes the tests defined in
-`models/work/staging/sources.yml` and `models/work/marts/schema.yml`.
+`models/warehouse/staging/sources.yml` and `models/warehouse/marts/schema.yml`.
 
 ## License
 
