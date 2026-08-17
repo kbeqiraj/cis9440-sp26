@@ -11,6 +11,13 @@ sources:
         description: |
           NYC 311 service requests related to drug activity.
           One row per service request.
+        # Thresholds are generous because the filter is narrow: on a quiet week
+        # the city may not log a single new drug-activity complaint.
+        config:
+          loaded_at_field: created_date
+          freshness:
+            warn_after: {count: 7, period: day}
+            error_after: {count: 30, period: day}
         columns:
           - name: unique_key
             description: Unique ID for the service request
@@ -85,6 +92,13 @@ sources:
       - name: nyc_shooting_incidents
         description: |
           NYPD shooting incident data. One row per shooting incident.
+        # NYPD publishes the year-to-date file quarterly, so anything tighter
+        # than this would page on the normal release cycle.
+        config:
+          loaded_at_field: occur_date
+          freshness:
+            warn_after: {count: 60, period: day}
+            error_after: {count: 180, period: day}
         columns:
           - name: incident_key
             description: Unique identifier for each shooting incident

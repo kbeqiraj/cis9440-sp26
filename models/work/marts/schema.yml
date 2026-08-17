@@ -131,29 +131,34 @@ models:
       - name: request_details_key
         tests:
           - relationships:
-              to: ref('dim_request_details')
-              field: details_key
+              arguments:
+                to: ref('dim_request_details')
+                field: details_key
       - name: request_status_key
         tests:
           - relationships:
-              to: ref('dim_request_resolution')
-              field: request_status_key
+              arguments:
+                to: ref('dim_request_resolution')
+                field: request_status_key
       - name: request_address_key
         tests:
           - relationships:
-              to: ref('dim_request_address')
-              field: request_address_key
+              arguments:
+                to: ref('dim_request_address')
+                field: request_address_key
       - name: region_key
         tests:
           - relationships:
-              to: ref('dim_region')
-              field: region_key
+              arguments:
+                to: ref('dim_region')
+                field: region_key
       - name: created_date_key
         description: Foreign key to dim_date for request creation.
         tests:
           - relationships:
-              to: ref('dim_date')
-              field: date_key
+              arguments:
+                to: ref('dim_date')
+                field: date_key
       - name: created_time_key
         description: Foreign key to dim_time for request creation.
       - name: closed_date_key
@@ -222,24 +227,28 @@ models:
       - name: victim_details_key
         tests:
           - relationships:
-              to: ref('dim_victim_details')
-              field: victim_details_key
+              arguments:
+                to: ref('dim_victim_details')
+                field: victim_details_key
       - name: incident_address_key
         tests:
           - relationships:
-              to: ref('dim_incident_address')
-              field: incident_address_key
+              arguments:
+                to: ref('dim_incident_address')
+                field: incident_address_key
       - name: region_key
         tests:
           - relationships:
-              to: ref('dim_region')
-              field: region_key
+              arguments:
+                to: ref('dim_region')
+                field: region_key
       - name: incident_date_key
         description: Foreign key to dim_date for the incident occurrence date.
         tests:
           - relationships:
-              to: ref('dim_date')
-              field: date_key
+              arguments:
+                to: ref('dim_date')
+                field: date_key
       - name: incident_time_key
         description: Foreign key to dim_time for the incident occurrence time.
       - name: incident_latitude
